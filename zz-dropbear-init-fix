@@ -6,12 +6,10 @@
 set -e
 
 PREREQ="dropbear"
-COMMANDS_LIST="md5sum cut cp sed mv"
 DB_INIT_BTM_ORG="$DESTDIR/scripts/init-bottom/dropbear"
 DB_INIT_BTM_TMP="$DESTDIR/scripts/init-bottom/dropbear-int-btm-fix.tmp1"
 BB_INIT_ORG="$DESTDIR/bin/busybox"
-BB_INIT_FULL="/bin/busybox-full"
-BB_SYSTEM="/bin/busybox"
+COMMANDS_LIST="md5sum cut cp patch mv"
 OLD_IFS="$IFS"
 DB_INIT_VER=""
 
@@ -71,16 +69,16 @@ IFS="$OLD_IFS"
 [ -r /usr/share/initramfs-tools/hook-functions ] || error_out "Could not find the hook functions"
 . /usr/share/initramfs-tools/hook-functions
 
-# Is busybox disables in initramfs.conf?
+# Is busybox disabled in initramfs.conf?
 [ n = "$BUSYBOX" ] && error_out "busybox utilities are disabled for initram"
 
 # Testing the presence of dropbear init-bottom script
 [ -x "$DB_INIT_BTM_ORG" ] || error_out "Could not find dropbear init-bottom script (is dropbear-initramfs installed?)"
 [ -h "$DB_INIT_BTM_ORG" ] && error_out "dropbear init-bottom script is a symlink (why?)"
 
-# Supported version must specifically added here. This is to reduce the chance
+# Supported versions must be specifically added here. This is to reduce the chance
 # of breaking things after an upgrade to dropbear-initramfs. If the script in question
-# doesn't change between upgrade though, it might still work.
+# doesn't change between upgrades though, it might still work.
 case "$(md5hash $DB_INIT_BTM_ORG)" in
   # v2017.75-3build1
   506f966b4f3df7fdb41f98d5d54fd9e4)
@@ -94,16 +92,11 @@ esac
 # Check the existence of the original busybox binary added by busybox-initramfs
 [ -x "$BB_INIT_ORG" ] || error_out "Could not find busybox location in initram"
 
-# Check the existence of the busybox we want to also include in initramfs
-[ -x "$BB_SYSTEM" ] || error_out "Either busybox or busybox-static package must be installed on the system"
-
-# Ensure the original busybox lacks extended options, and the new one does not.
-# We do this by actually executing both busybox executables. This should be safe
-# as non-root users, are not allowed to make changes to the binaries in either location.
+# Ensure the original busybox lacks extended options.
+# We do this by actually executing the initram busybox. This should be safe
+# as non-root users, are not allowed to make changes to the binary.
 if $BB_INIT_ORG ps -o ppid >/dev/null 2>&1; then
   error_out "busybox initram, seems to be supporting extended options now. No patch is needed"
-elif ! $BB_SYSTEM ps -o ppid >/dev/null 2>&1; then
-  error_out "\"$BB_SYSTEM\" on the system, does not support extended options"
 fi
 
 # We do the patching on a tmp file first
@@ -111,26 +104,36 @@ if ! cp -p "$DB_INIT_BTM_ORG" "$DB_INIT_BTM_TMP"; then
   error_out "Could not create the tmp file"
 fi
 
-# This is where the magic happens. Basically What it does, is that it makes the
-# offending commands in dropbear init-bottom script, to be run by 
-# the busybox-full binary (the arguments used in those commands, require
-# a busybox build with the support of extended options).
-# It does so, based on the specific versions, and we top it off we check
-# the md5 hash of the pacthed file.
+# This is where the magic happens. Basically, it fixes the
+# offending commands in dropbear init-bottom script (the arguments 
+# originally used in those commands, require a busybox build with 
+# the support of extended options). Based on the supported versions, 
+# we patch them and to top it off, we check the md5 hash of the pacthed 
+# file.
 case $DB_INIT_VER in
   75)
-    sed -i "s_ps -o_$BB_INIT_FULL &_g" "$DB_INIT_BTM_TMP"
-    sed -i "s_kill -TERM -_$BB_INIT_FULL &_g" "$DB_INIT_BTM_TMP"
-    [ "$(md5hash $DB_INIT_BTM_TMP)" = "8e0c25b1f03b26f42a123cae35e6837f" ] || error_out "sed patch mismatch"
+    # This patch is ported from dropbear-initramfs 2018.76-5 in debian 10
+    if ! patch "$DB_INIT_BTM_TMP" <<'EOF'
+@@ -28,2 +28,2 @@
+-    ps -o ppid= -o pid= -o pgid= | \
+-        sed -nr "s/^\s*$PID\s+([0-9]+)\s+\1\s*$/\1/p" | \
++    sed -nr "s/^([0-9]+) \\(.*\\) \\S $PID \\1 .*/\\1/p" \
++        /proc/[0-9]*/stat 2>/dev/null | \
+@@ -33,2 +33,2 @@
+-    ps -o ppid= -o pid= | \
+-        sed -nr "s/^\s*$PID\s+([0-9]+)\s*$/\1/p" | \
++    sed -nr "s/^([0-9]+) \\(.*\\) \\S $PID [0-9]+ .*/\\1/p" \
++        /proc/[0-9]*/stat 2>/dev/null | \
+EOF
+    then
+      error_out "could not apply the patch"
+    fi
+    [ "$(md5hash $DB_INIT_BTM_TMP)" = "5424920866450179ec08b486eb60f531" ] || error_out "patch hash mismatch"
     ;;
   *)
     error_out "Could not match against any valid patch (This should have never happened)"
     ;;
 esac
-
-# Include the busybox-full binary
-copy_exec "$BB_SYSTEM" "$BB_INIT_FULL"
-[ -x "$DESTDIR/$BB_INIT_FULL" ] || error_out "Could not copy the busybox full binary into the initram"
 
 # Now it should be safe to replace the original dropbear init-bottom script.
 # This is the last step and it really should not fail at this point, but if it does,
