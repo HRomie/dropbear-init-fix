@@ -8,7 +8,6 @@ set -e
 PREREQ="dropbear"
 DB_INIT_BTM_ORG="$DESTDIR/scripts/init-bottom/dropbear"
 DB_INIT_BTM_TMP="$DESTDIR/scripts/init-bottom/dropbear-int-btm-fix.tmp1"
-BB_INIT_ORG="$DESTDIR/bin/busybox"
 COMMANDS_LIST="md5sum cut cp patch mv"
 OLD_IFS="$IFS"
 DB_INIT_VER=""
@@ -69,9 +68,6 @@ IFS="$OLD_IFS"
 [ -r /usr/share/initramfs-tools/hook-functions ] || error_out "Could not find the hook functions"
 . /usr/share/initramfs-tools/hook-functions
 
-# Is busybox disabled in initramfs.conf?
-[ n = "$BUSYBOX" ] && error_out "busybox utilities are disabled for initram"
-
 # Testing the presence of dropbear init-bottom script
 [ -x "$DB_INIT_BTM_ORG" ] || error_out "Could not find dropbear init-bottom script (is dropbear-initramfs installed?)"
 [ -h "$DB_INIT_BTM_ORG" ] && error_out "dropbear init-bottom script is a symlink (why?)"
@@ -88,16 +84,6 @@ case "$(md5hash $DB_INIT_BTM_ORG)" in
     error_out "dropbear init-bottom script hash did not match. This is probably due to updates to dropbear-initramfs package. This calls for a new evaluation of the script (the patch might not be needed anymore)."
     ;;
 esac
-
-# Check the existence of the original busybox binary added by busybox-initramfs
-[ -x "$BB_INIT_ORG" ] || error_out "Could not find busybox location in initram"
-
-# Ensure the original busybox lacks extended options.
-# We do this by actually executing the initram busybox. This should be safe
-# as non-root users, are not allowed to make changes to the binary.
-if $BB_INIT_ORG ps -o ppid >/dev/null 2>&1; then
-  error_out "busybox initram, seems to be supporting extended options now. No patch is needed"
-fi
 
 # We do the patching on a tmp file first
 if ! cp -p "$DB_INIT_BTM_ORG" "$DB_INIT_BTM_TMP"; then
