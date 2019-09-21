@@ -85,7 +85,7 @@ case "$(md5hash $DB_INIT_BTM_ORG)" in
     DB_INIT_VER=75
     ;; 
   *)
-    error_out "dropbear init-bottom script hash did not match. This is probably due to updates to dropbear-initramfs package. This calls for new evaluation of the script."
+    error_out "dropbear init-bottom script hash did not match. This is probably due to updates to dropbear-initramfs package. This calls for a new evaluation of the script (the patch might not be needed anymore)."
     ;;
 esac
 
@@ -113,7 +113,7 @@ fi
 case $DB_INIT_VER in
   75)
     # This patch is ported from dropbear-initramfs 2018.76-5 in debian 10
-    if ! patch "$DB_INIT_BTM_TMP" <<'EOF'
+    if ! patch -s "$DB_INIT_BTM_TMP" <<'EOF'
 @@ -28,2 +28,2 @@
 -    ps -o ppid= -o pid= -o pgid= | \
 -        sed -nr "s/^\s*$PID\s+([0-9]+)\s+\1\s*$/\1/p" | \
