@@ -25,7 +25,7 @@ This problem manifests itself in these forms:
 * You will get a couple of `ps` errors in your terminal right after LUKS unlocking.
 * You might get this scary message in your terminal after boot up:  
   > Aiee, segfault! You should probably report this as a bug to the developer
-* Your network interfaces *might* refuse to automatically come up again
+* Your network interfaces *might* refuse to automatically come up after a successful boot.
 
 ## How it works
 
