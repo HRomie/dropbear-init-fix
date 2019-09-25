@@ -1,16 +1,22 @@
 #!/bin/sh
 
-# Hamy - www.hamy.io
+# *****************************
+# A script to fix the inconsistency found in dropbear-initramfs package in Ubuntu 18.04.x
+# https://github.com/HRomie/dropbear-init-fix
+#
+# Hamy - https://hamy.io
+# *****************************
 
 # Any error, should result in script failure
 set -e
 
 PREREQ="dropbear"
 DB_INIT_BTM_ORG="$DESTDIR/scripts/init-bottom/dropbear"
-DB_INIT_BTM_TMP="$DESTDIR/scripts/init-bottom/dropbear-int-btm-fix.tmp1"
+DB_INIT_BTM_TMP="$DESTDIR/scripts/init-bottom/dropbear-init-fix.tmp"
 COMMANDS_LIST="md5sum cut cp patch mv"
 OLD_IFS="$IFS"
 DB_INIT_VER=""
+TMP_FILE_STATUS=0
 
 # Handles errors
 error_out()
@@ -18,7 +24,7 @@ error_out()
   echo "************* WARNING *************"
   echo "$1"
   # If we have created the tmp file, it's time to delete it
-  if [ -f "$DB_INIT_BTM_TMP" ]; then
+  if [ $TMP_FILE_STATUS -eq 1 ]; then
     rm "$DB_INIT_BTM_TMP" || echo "Could not delete \"$DB_INIT_BTM_TMP\""
   fi
   echo "\"$0\" will not be applied"
@@ -42,7 +48,7 @@ prereqs()
 }
 
 # Protect the script from direct execution
-if [ "$DESTDIR" = "" ]; then
+if [ -z "$DESTDIR" ]; then
   echo "Error: This script is not be run directly" >&2
   exit 1
 fi
@@ -86,9 +92,11 @@ case "$(md5hash $DB_INIT_BTM_ORG)" in
 esac
 
 # We do the patching on a tmp file first
+[ -e "$DB_INIT_BTM_TMP" ] && error_out "destination tmp file already exists"
 if ! cp -p "$DB_INIT_BTM_ORG" "$DB_INIT_BTM_TMP"; then
   error_out "Could not create the tmp file"
 fi
+TMP_FILE_STATUS=1
 
 # This is where the magic happens. Basically, it fixes the
 # offending commands in dropbear init-bottom script (the arguments 
@@ -126,6 +134,7 @@ esac
 # we're not going to handle it. Instead, we let the script fail so initram build is stopped.
 # That way the user can investigate wth is going on.
 mv -f "$DB_INIT_BTM_TMP" "$DB_INIT_BTM_ORG"
+TMP_FILE_STATUS=2
 
 # And we are done!
 echo "successfully applied: $0"
